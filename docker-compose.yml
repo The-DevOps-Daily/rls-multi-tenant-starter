@@ -1,0 +1,17 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: rlsdemo
+    # Loopback only. Nothing here should be reachable from anywhere else.
+    ports:
+      - "127.0.0.1:55432:5432"
+    # The files in sql/ run in name order on first start of an empty volume.
+    volumes:
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rlsdemo"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
