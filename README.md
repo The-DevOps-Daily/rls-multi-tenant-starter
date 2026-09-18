@@ -1,5 +1,8 @@
 # Multi-tenant Postgres with row-level security
 
+> Written up at [Your Tenant Isolation Is One Forgotten WHERE Clause Away](https://devops-daily.com/posts/postgres-row-level-security-multi-tenant)
+
+
 A small, complete multi-tenant schema where **the application never filters by
 tenant**. It says who it is; the database decides what that identity can see.
 
