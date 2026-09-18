@@ -1,9 +1,12 @@
 """
 Fixtures for the isolation tests.
 
-Everything connects as `app_user`, never as the owner or a superuser. That is
-not a detail: both of those bypass row-level security, so a suite that connects
-as postgres would pass against a completely unprotected table.
+The isolation tests connect as `app_user`, an unprivileged role. That is not a
+detail: a table's owner is exempt from its own policies unless they are FORCEd,
+and a superuser is exempt regardless.
+
+Owner and superuser fixtures exist further down, but only so that the gotcha
+tests can show what each of them changes. No isolation claim rests on them.
 """
 import os
 import psycopg

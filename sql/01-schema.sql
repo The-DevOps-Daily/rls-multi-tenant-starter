@@ -11,13 +11,21 @@ CREATE TABLE tenants (
 );
 
 CREATE TABLE documents (
-    id        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    id        uuid NOT NULL DEFAULT gen_random_uuid(),
     tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     title     text NOT NULL,
-    body      text NOT NULL DEFAULT ''
-);
+    body      text NOT NULL DEFAULT '',
 
-CREATE INDEX documents_tenant_id_idx ON documents (tenant_id);
+    -- Tenant-scoped, not a globally unique id.
+    --
+    -- Constraints are checked outside the policy, so a globally unique id is a
+    -- cross-tenant existence oracle: insert a guessed id and a unique violation
+    -- tells you another tenant holds it, without you ever being able to read
+    -- the row. Scoping the key to the tenant removes that channel. It also
+    -- puts tenant_id first in the index, which is the column every query
+    -- filters on anyway.
+    PRIMARY KEY (tenant_id, id)
+);
 
 -- Two roles, neither of them a superuser.
 --

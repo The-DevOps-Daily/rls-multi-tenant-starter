@@ -3,7 +3,7 @@ The claims a multi-tenant system has to be able to make.
 
 Each test states one of them and then tries to break it. Reading a row you
 should not see is the obvious failure; writing one into someone else's tenant
-is the one people forget, because USING alone does not stop it.
+is the one people forget to check for.
 """
 import psycopg
 import pytest
@@ -41,7 +41,11 @@ def test_selecting_another_tenant_by_id_returns_nothing(conn):
 
 
 def test_insert_into_another_tenant_is_refused(conn):
-    """WITH CHECK. USING alone would allow this."""
+    """
+    Enforced by WITH CHECK. Note that omitting WITH CHECK entirely would also
+    be safe, because Postgres reuses USING for writes; the hazard is writing an
+    explicit one that is weaker, which verify-suite.sh demonstrates.
+    """
     as_tenant(conn, ACME)
     with pytest.raises(psycopg.errors.InsufficientPrivilege):
         conn.execute(
@@ -90,3 +94,22 @@ def test_no_tenant_set_means_no_rows(conn):
 def test_a_forged_tenant_id_sees_nothing(conn):
     as_tenant(conn, "33333333-3333-3333-3333-333333333333")
     assert titles(conn) == []
+
+
+def test_the_tenants_table_is_isolated_too(conn):
+    """
+    Easy to forget. Without this, RLS could be disabled on `tenants` and every
+    other test here would still pass, while the tenant list, and therefore the
+    customer list, was readable by anyone.
+    """
+    as_tenant(conn, ACME)
+    names = [r[0] for r in conn.execute("SELECT name FROM tenants").fetchall()]
+    assert names == ["Acme"]
+
+
+def test_a_tenant_cannot_rename_another(conn):
+    as_tenant(conn, ACME)
+    cur = conn.execute(
+        "UPDATE tenants SET name = %s WHERE id = %s", ("owned", GLOBEX)
+    )
+    assert cur.rowcount == 0
