@@ -37,7 +37,7 @@ claim is checked rather than asserted.
 ./verify-suite.sh
 ```
 
-It breaks the schema on purpose and re-runs the suite each time:
+It starts the database if it is not already up, then breaks the schema on purpose and re-runs the suite each time:
 
 ```
 baseline                                  16 passed

@@ -7,9 +7,24 @@
 # It exits non-zero if any mutation goes undetected, which is the point: a
 # script that only printed results would itself be the thing nobody checked.
 #
-# Run it after run-tests.sh, against the same running database.
+# Standalone: brings the database up if it is not already running, which it
+# will not be after run-tests.sh, because that tears its own down.
 set -uo pipefail
 cd "$(dirname "$0")"
+
+started_db=0
+if ! docker compose ps --status running --quiet db >/dev/null 2>&1 || \
+   [ -z "$(docker compose ps --status running --quiet db 2>/dev/null)" ]; then
+  echo "==> starting postgres"
+  docker compose up -d --wait >/dev/null
+  started_db=1
+fi
+
+if [ ! -x ./.venv/bin/python ]; then
+  echo "==> installing test dependencies"
+  python3 -m venv .venv >/dev/null
+  ./.venv/bin/pip install -q -r requirements.txt
+fi
 
 PSQL=(docker compose exec -T db psql -U postgres -d rlsdemo -Atq -v ON_ERROR_STOP=1)
 PY=./.venv/bin/python
@@ -33,7 +48,12 @@ restore() {
          USING (tenant_id = current_tenant())
          WITH CHECK (tenant_id = current_tenant())"
 }
-trap restore EXIT
+finish() {
+  restore
+  [ "$started_db" -eq 1 ] && docker compose down -v >/dev/null 2>&1
+  return 0
+}
+trap finish EXIT
 
 # Runs the suite and asserts the outcome. `expect` is pass or fail.
 check() {
