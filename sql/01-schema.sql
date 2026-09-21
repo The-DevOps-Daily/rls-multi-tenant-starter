@@ -33,8 +33,34 @@ CREATE TABLE documents (
 -- application connects as. Keeping them apart is what makes FORCE meaningful:
 -- a table owner is exempt from its own policies unless forced, and if the
 -- owner were also the superuser no amount of forcing would matter.
-CREATE ROLE app_owner LOGIN PASSWORD 'owner_password';
-CREATE ROLE app_user  LOGIN PASSWORD 'app_password';
+-- The passwords are long and mixed on purpose. Neon validates them in its
+-- control plane, and CREATE ROLE with a short one fails the statement with an
+-- HTTP 400, not a Postgres error: "insecure password, try including more
+-- special characters". A demo that uses 'app_password' does not run on Neon.
+CREATE ROLE app_owner LOGIN PASSWORD 'Ow2ner-Rls-Demo-2026!';
+CREATE ROLE app_user  LOGIN PASSWORD 'Ap3pUser-Rls-Demo-2026!';
+
+-- Two grants that only Neon needs, and that only Neon explains.
+--
+-- On a local Postgres the entrypoint runs as a superuser, which is exempt from
+-- both checks below, so the ALTER TABLE statements that follow just work. On
+-- Neon nothing is a superuser, and each check fires in turn.
+--
+-- 1. ALTER TABLE ... OWNER TO requires the current user to be able to SET ROLE
+--    to the new owner. Creating a role usually grants that implicitly, but on
+--    Neon the membership comes back with set_option = false, so the statement
+--    fails with: must be able to SET ROLE "app_owner". The admin option is
+--    granted, so the role can hand itself the missing part.
+--
+-- 2. The new owner must hold CREATE on the schema that holds the table.
+DO $neon$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'neon_superuser') THEN
+        EXECUTE 'GRANT app_owner TO CURRENT_USER WITH SET TRUE';
+        EXECUTE 'GRANT CREATE ON SCHEMA public TO app_owner';
+    END IF;
+END
+$neon$;
 
 ALTER TABLE tenants   OWNER TO app_owner;
 ALTER TABLE documents OWNER TO app_owner;
@@ -63,9 +89,18 @@ ALTER TABLE documents FORCE ROW LEVEL SECURITY;
 ALTER TABLE tenants   FORCE ROW LEVEL SECURITY;
 
 -- Worth being explicit about what FORCE does not do: it has no effect on a
--- superuser. A superuser bypasses row-level security entirely, whatever the
--- table says. That is why the application and its migrations must not connect
--- as one, and why this file creates two ordinary roles instead.
+-- role holding BYPASSRLS. Such a role skips row-level security entirely,
+-- whatever the table says. Every superuser has it implicitly.
+--
+-- On Neon this is the trap, because you do not have to reach for a superuser
+-- to hit it. The role in the connection string the console shows you,
+-- neondb_owner, has rolbypassrls = true. Paste that into an application and
+-- every policy below is decoration. Check before you trust it:
+--
+--     SELECT rolname, rolbypassrls FROM pg_roles WHERE rolname = current_user;
+--
+-- That is why this file creates two ordinary roles instead of using the one
+-- Neon hands you.
 
 -- USING controls which rows are visible to SELECT, UPDATE and DELETE.
 -- WITH CHECK controls which rows may be written by INSERT and UPDATE.
