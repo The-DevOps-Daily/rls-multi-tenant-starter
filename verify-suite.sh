@@ -12,12 +12,16 @@
 set -uo pipefail
 cd "$(dirname "$0")"
 
+# Two ways to reach the database. run-on-neon.sh exports NEON_OWNER_URL, in
+# which case the branch it made is already up and Docker is not involved.
 started_db=0
-if ! docker compose ps --status running --quiet db >/dev/null 2>&1 || \
-   [ -z "$(docker compose ps --status running --quiet db 2>/dev/null)" ]; then
-  echo "==> starting postgres"
-  docker compose up -d --wait >/dev/null
-  started_db=1
+if [ -z "${NEON_OWNER_URL:-}" ]; then
+  if ! docker compose ps --status running --quiet db >/dev/null 2>&1 || \
+     [ -z "$(docker compose ps --status running --quiet db 2>/dev/null)" ]; then
+    echo "==> starting postgres"
+    docker compose up -d --wait >/dev/null
+    started_db=1
+  fi
 fi
 
 if [ ! -x ./.venv/bin/python ]; then
@@ -26,12 +30,18 @@ if [ ! -x ./.venv/bin/python ]; then
   ./.venv/bin/pip install -q -r requirements.txt
 fi
 
-PSQL=(docker compose exec -T db psql -U postgres -d rlsdemo -Atq -v ON_ERROR_STOP=1)
 PY=./.venv/bin/python
 failures=0
 
 sql() {
-  if ! "${PSQL[@]}" -c "$1" >/dev/null 2>&1; then
+  if [ -n "${NEON_OWNER_URL:-}" ]; then
+    if ! $PY neon/exec.py "$1" >/dev/null 2>&1; then
+      echo "  ! could not apply: ${1:0:60}..."
+      failures=$((failures + 1))
+    fi
+    return
+  fi
+  if ! docker compose exec -T db psql -U postgres -d rlsdemo -Atq -v ON_ERROR_STOP=1 -c "$1" >/dev/null 2>&1; then
     echo "  ! could not apply: ${1:0:60}..."
     failures=$((failures + 1))
   fi
@@ -50,7 +60,7 @@ restore() {
 }
 finish() {
   restore
-  [ "$started_db" -eq 1 ] && docker compose down -v >/dev/null 2>&1
+  if [ "$started_db" -eq 1 ]; then docker compose down -v >/dev/null 2>&1; fi
   return 0
 }
 trap finish EXIT

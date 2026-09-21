@@ -17,11 +17,11 @@ GLOBEX = "22222222-2222-2222-2222-222222222222"
 
 DSN = os.environ.get(
     "RLS_DEMO_DSN",
-    "postgresql://app_user:app_password@127.0.0.1:55432/rlsdemo",
+    "postgresql://app_user:Ap3pUser-Rls-Demo-2026%21@127.0.0.1:55432/rlsdemo",
 )
 OWNER_DSN = os.environ.get(
     "RLS_DEMO_OWNER_DSN",
-    "postgresql://app_owner:owner_password@127.0.0.1:55432/rlsdemo",
+    "postgresql://app_owner:Ow2ner-Rls-Demo-2026%21@127.0.0.1:55432/rlsdemo",
 )
 # A superuser, used only to show what it ignores.
 SUPERUSER_DSN = os.environ.get(
